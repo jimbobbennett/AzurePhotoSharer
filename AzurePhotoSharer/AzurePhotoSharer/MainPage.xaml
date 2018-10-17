@@ -1,0 +1,61 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://xamarin.com/schemas/2014/forms"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:local="clr-namespace:AzurePhotoSharer"
+             x:Class="AzurePhotoSharer.MainPage"
+             Title="Photos">
+    <ContentPage.BindingContext>
+        <local:MainViewModel/>
+    </ContentPage.BindingContext>
+    <Grid Padding="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <ListView Grid.ColumnSpan="2" 
+                  SeparatorVisibility="None"
+                  ItemsSource="{Binding Photos}"
+                  IsPullToRefreshEnabled="True"
+                  IsRefreshing="{Binding IsRefreshing}"
+                  RefreshCommand="{Binding RefreshPhotosCommand}"
+                  HasUnevenRows="true">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <ViewCell>
+                        <Frame>
+                            <StackLayout Orientation="Vertical">
+                                <Image Source="{Binding Photo}"
+                                       Aspect="AspectFit"
+                                       HeightRequest="200"
+                                       Margin="20"/>
+                                <Label Text="{Binding Description}"
+                                       HorizontalTextAlignment="Center"
+                                       TextColor="DarkGray"
+                                       FontSize="Large"/>
+                            </StackLayout>
+                        </Frame>
+                    </ViewCell>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <Button Grid.Row="1"
+                Grid.Column="0"
+                Text="Take Photo"
+                BackgroundColor="DarkSlateGray"
+                TextColor="White"
+                Command="{Binding TakePhotoCommand}"/>
+        <Button Grid.Row="1"
+                Grid.Column="1"
+                Text="Choose Photo"
+                BackgroundColor="DarkSlateGray"
+                TextColor="White"
+                Command="{Binding ChoosePhotoCommand}"/>
+    </Grid>
+
+</ContentPage>
