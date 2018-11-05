@@ -25,7 +25,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>AzurePhotoSharer</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.companyname.AzurePhotoSharer</string>
+	<string>io.jimbobbennett.AzurePhotoSharer</string>
 	<key>CFBundleVersion</key>
 	<string>1.0</string>
 	<key>UILaunchStoryboardName</key>

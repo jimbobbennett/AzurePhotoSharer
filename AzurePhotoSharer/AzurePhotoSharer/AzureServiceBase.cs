@@ -21,7 +21,7 @@ namespace AzurePhotoSharer
         protected const string CallbackName = "azurephotosharer";
         protected const string AzureAppName = "<Your app name>";
         //protected readonly static string FunctionAppUrl = $"https://{AzureAppName}.azurewebsites.net";
-        protected const string FunctionAppUrl = $"http://localhost:7071";
+        protected const string FunctionAppUrl = "http://localhost:7071";
 
         public MobileServiceClient Client { get; }
 
