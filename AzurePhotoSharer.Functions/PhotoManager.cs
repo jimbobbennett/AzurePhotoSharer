@@ -14,26 +14,18 @@ using Microsoft.Azure.CognitiveServices.Vision.ComputerVision;
 using Microsoft.WindowsAzure.Storage.Table;
 using Microsoft.CognitiveServices.ContentModerator;
 using ApiKeyServiceClientCredentials = Microsoft.Azure.CognitiveServices.Vision.ComputerVision.ApiKeyServiceClientCredentials;
+using System.Net.Http;
+using System.Text;
 
 namespace AzurePhotoSharer.Functions
 {
     public static class PhotoManager
     {
-        static PhotoManager()
-        {
-            // Nasty hack for local!
-            var storageAccount = CloudStorageAccount.Parse(Environment.GetEnvironmentVariable("StorageConnectionString"));
-            var photoMetadataTable = storageAccount.CreateCloudTableClient().GetTableReference("photometadata");
-            var photoContainer = storageAccount.CreateCloudBlobClient().GetContainerReference("photos");
-            photoMetadataTable.CreateIfNotExistsAsync();
-            photoContainer.CreateIfNotExistsAsync();
-        }
-
-        readonly static ContentModeratorClient ContentModeratorClient = 
+        readonly static ContentModeratorClient ContentModeratorClient =
             new ContentModeratorClient(new ApiKeyServiceClientCredentials(Environment.GetEnvironmentVariable("ContentModeratorKey")))
-        {
-            Endpoint = "https://westeurope.api.cognitive.microsoft.com/"
-        };
+            {
+                Endpoint = "https://westeurope.api.cognitive.microsoft.com/"
+            };
 
         static async Task<bool> IsAllowed(byte[] imageBytes)
         {
@@ -48,7 +40,7 @@ namespace AzurePhotoSharer.Functions
 
             return true;
         }
-        
+
         [FunctionName("UploadPhoto")]
         public static async Task<IActionResult> UploadPhoto(
             [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photo/{name}")]HttpRequest req,
@@ -64,23 +56,23 @@ namespace AzurePhotoSharer.Functions
                 log.LogWarning("Naughty image found");
                 return new BadRequestResult();
             }
-            
+
             await imageStream.WriteAsync(imageBytes, 0, imageBytes.Length);
 
             return new OkResult();
         }
 
-        readonly static ComputerVisionClient ComputerVisionClient = 
+        readonly static ComputerVisionClient ComputerVisionClient =
             new ComputerVisionClient(new ApiKeyServiceClientCredentials(Environment.GetEnvironmentVariable("ComputerVisionKey")))
-        {
-            Endpoint = "https://westeurope.api.cognitive.microsoft.com/"
-        };
+            {
+                Endpoint = "https://westeurope.api.cognitive.microsoft.com/"
+            };
 
         [FunctionName("PhotoBlobTrigger")]
         [return: Table("photometadata", Connection = "StorageConnectionString")]
         public static async Task<CloudPhotoMetadata> PhotoBlobTrigger(
-            [BlobTrigger("photos/{name}", Connection = "StorageConnectionString")] Stream imageStream, 
-            string name, 
+            [BlobTrigger("photos/{name}", Connection = "StorageConnectionString")] Stream imageStream,
+            string name,
             ILogger log)
         {
             var descriptions = await ComputerVisionClient.DescribeImageInStreamAsync(imageStream);
@@ -93,7 +85,7 @@ namespace AzurePhotoSharer.Functions
                 RowKey = name,
                 BlobName = name,
                 Description = description
-            };            
+            };
         }
 
         [FunctionName("GetAllPhotos")]
@@ -107,6 +99,11 @@ namespace AzurePhotoSharer.Functions
             return new OkObjectResult(results);
         }
 
+        static readonly HttpClient client = new HttpClient
+        {
+            MaxResponseContentBufferSize = 2147483647
+        };
+
         [FunctionName("DownloadPhoto")]
         public static async Task<IActionResult> DownloadPhoto(
             [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photo/{name}")]HttpRequest req,
@@ -116,8 +113,14 @@ namespace AzurePhotoSharer.Functions
             var bytes = new byte[imageStream.Length];
             await imageStream.ReadAsync(bytes, 0, Convert.ToInt32(imageStream.Length));
             var content = new Photo { PhotoBase64 = Convert.ToBase64String(bytes) };
+            var jsonContent = JsonConvert.SerializeObject(content);
 
-            return new OkObjectResult(content);
+            var mojifiedResult = await client.PostAsync(Environment.GetEnvironmentVariable("MojifierUrl"),
+                new StringContent(jsonContent, Encoding.UTF8, "application/json"));
+
+            var mojified = await mojifiedResult.Content.ReadAsAsync<Photo>();
+
+            return new OkObjectResult(mojified);
         }
     }
 }
