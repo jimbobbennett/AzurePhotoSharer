@@ -14,6 +14,27 @@ The architecture of this app is:
 * If the photo passes the content moderator, it is saved into blob storage
 * Once a photo is saved into blob storage, a trigger is fired that runs the photo through the computer vision cognitive service to create a caption. This is then saved to table storage.
 * The client can then download the images and captions over the REST API.
+* When the images are downloaded they are 'mojified' - so any faces detected in the image are replaced with emojis showing the same emotion.
+
+## Application structure
+
+This app is made up of seven projects - two for the back end, four for the mobile app and one that is shared.
+
+### Back end
+
+* `AzurePhotoSharer.Functions` - This is an Azure Functions V2 project built using C#, containing the main back end. This consists of a number of HTTP triggers that exposes a REST endpoint, and a blob storage trigger.
+* `AzurePhotoSharer.FSharp.Functions` - This is an Azure Functions V1 project built using F# that has a single HTTP trigger to 'mojify' an image.
+
+### Mobile app
+
+* `AzurePhotoSharer` - This is a Xamarin.Forms .NET standard project containing all the UI and ap logic for the mobile app.
+* `AzurephotoSharer.Android` - The Android app project for the Xamarin.Forms app.
+* `AzurephotoSharer.iOS` - The iOS app project for the Xamarin.Forms app.
+* `AzurephotoSharer.UWP` - The UWP app project for the Xamarin.Forms app.
+
+### Shared code
+
+* `AzurePhotoSharer.Shared` - This project contains a data type that is shared by both the front and back end.
 
 ## To get started
 
@@ -29,7 +50,10 @@ You will need to register for an Azure free account here: [azure.microsoft.com/f
 * Create a new __Computer Vision__ resource, again using the F0 free tier.
   ![Searching for the computer vision resource in the Azure Portal](./Images/ComputerVision.png)
 
-* Generate API keys for both of these services and add them to the `local.settings.json` file in the `AzurePhotoSharer.Functions` project.
+* Create a new __Face__ resource, again using the F0 free tier.
+  ![Searching for the computer vision resource in the Azure Portal](./Images/Face.png)
+
+* Get API keys for all of these services. Add the content moderation and computer vision keys to the `local.settings.json` file in the `AzurePhotoSharer.Functions` project.
 
   ```json
   {
@@ -42,7 +66,19 @@ You will need to register for an Azure free account here: [azure.microsoft.com/f
   }
   ```
 
-* Update the endpoints in the `PhotoManager.cs` file if necessary.
+  * Add the Face key to the `local.settings.json` file in the `AzurePhotoSharer.FSharp.Functions` project.
+
+  ```json
+  {
+    ...
+    "Values": {
+      ...
+      "EmotionApiKey": "<Your Face API key>"
+    }
+  }
+  ```
+
+  * Update the endpoints in the `PhotoManager.cs` file in the `AzurePhotoSharer.Functions` project if necessary.
 
   ```cs
   readonly static ContentModeratorClient ContentModeratorClient =
@@ -58,15 +94,40 @@ You will need to register for an Azure free account here: [azure.microsoft.com/f
     };
   ```
 
+  * Update the endpoint in the `FaceMoji.fs` file in in the `AzurePhotoSharer.FSharp.Functions` project if necessary.
+
+  ```fsharp
+  let faceClient =
+        let fc = new FaceClient(apiKeyCredentials)
+        fc.Endpoint <- "https://westeurope.api.cognitive.microsoft.com" // Update this if necessary
+        fc
+  ```
+
 ## Running the service locally on Windows
 
 * Install the [Azure Storage Emulator](https://docs.microsoft.com/azure/storage/common/storage-use-emulator/?WT.mc_id=azurefree-github-jabenn) and launch it
-* Start the `AzurePhotoSharer.Functions` project without debugging
-* Set the `AzurePhotoSharer.UWP` project as the startup project and run it. It will connect to the local Azure Functions runtime and allow you to take or choose photos and upload these to local storage. You will see the images that are uploaded, along with their captions. If you upload any racy images you will see an error.
+* Start the `AzurePhotoSharer.Functions` project without debugging.
   
-  ![The functions running in the local emulator](./Images/RunningLocalFunc.png)
+  ![The functions running in the local functions host](./Images/RunningLocalFunc.png)
+
+* Share the `AzurePhotoSharer.FSharp.Functions` project without debugging.
+  __NOTE__ - by default, this project will try to run listening on the same port as the `AzurePhotoSharer.Functions` project. You will need to configure this to run on a different port. To do this, right-click on the `AzurePhotoSharer.FSharp.Functions` project in the solution explorer and select _Properties_. From the __Debug__ tab, set the _Application arguments_ to be:
+
+  ```sh
+  host start --pause-on-error --port 5860
+  ```
+
+  ![Configuring the functions host port](./Images/ChangeFunctionsHost.png)
+
+  Then start the app without debugging. The port it will use is 5860, and the `AzurePhotoSharer.Functions` project is already pre-configured to use this port.
+
+  ![The F# functions app running in the local functions host](./Images/RunningLocalFsFunc.png)
+
+* Set the `AzurePhotoSharer.UWP` project as the startup project and run it. It will connect to the local Azure Functions runtime and allow you to take or choose photos and upload these to local storage. You will see the images that are uploaded, along with their captions. If you upload any racy images you will see an error.
 
   ![A demo of the app running](./Images/AppDemo.gif)
+
+  You won't be able to use the iOS and Android apps at the moment as they can't be default point to 'localhost'. You will only be able to test these once this app has been deployed to Azure.
 
 ## Running the service from Azure
 
@@ -77,15 +138,21 @@ You will need to register for an Azure free account here: [azure.microsoft.com/f
 
   ![Searching for the storage resource in the Azure Portal](./Images/StorageAccount.png)
 
-* Deploy your function from Visual Studio to this Function App, either by [publishing directly form inside Visual Studio](https://docs.microsoft.com/azure/azure-functions/functions-develop-vs/?WT.mc_id=azurefree-github-jabenn), or by using the [__Deployment Center__](https://docs.microsoft.com/azure/azure-functions/functions-continuous-deployment/?WT.mc_id=azurefree-github-jabenn). Publishing from Visual Studio should never be used for production code.
+* Deploy both functions apps from Visual Studio to this Function App, either by [publishing directly form inside Visual Studio](https://docs.microsoft.com/azure/azure-functions/functions-develop-vs/?WT.mc_id=azurefree-github-jabenn), or by using the [__Deployment Center__](https://docs.microsoft.com/azure/azure-functions/functions-continuous-deployment/?WT.mc_id=azurefree-github-jabenn). Publishing from Visual Studio should never be used for production code.
 
   ![Friends don't let friends right-click publish](https://damianbrady.com.au/content/images/2018/01/friends-sticker.png)
 
-* Configure the [application settings](https://docs.microsoft.com/azure/azure-functions/functions-how-to-use-azure-function-app-settings/?WT.mc_id=azurefree-github-jabenn) for your Function app, setting the following fields:
+* Configure the [application settings](https://docs.microsoft.com/azure/azure-functions/functions-how-to-use-azure-function-app-settings/?WT.mc_id=azurefree-github-jabenn) for both Functions app. 
+  Set the following fields for the `AzurePhotoSharer.Functions` app:
   
+  * `MojifierUrl` - set this to the URL for the published `AzurePhotoSharer.FSharp.Functions` project
   * `ContentModeratorKey` - set this to the API key for your content moderator resource
   * `ComputerVisionKey` - set this to the API key for your computer vision resource
   * `StorageConnectionString` - set this to a connection string for your storage resource
+
+  Set the following fields for the `AzurePhotoSharer.FSharp.Functions` app:
+  
+  * `EmotionApiKey` - set this to the API key for your Face resource
 
 * Configure the app to point to your new Function app by updating the `AzureAppName` constant in the `AzureServiceBase.cs` file in the `AzurePhotoSharing` project to match the name of your app. Set the `FunctionAppUrl` constant to be the full URL of your app by commenting out the `localhost` version and uncommenting the full URL.
 
@@ -95,7 +162,7 @@ You will need to register for an Azure free account here: [azure.microsoft.com/f
   //protected const string FunctionAppUrl = $"http://localhost:7071";   // Comment this line out
   ```
 
-* Run the app. It will now use Azure for the back end and storage.
+* Run the app. It will now use Azure for the back end and storage and will run on all platforms.
 
 ## Adding authentication
 
